@@ -1,0 +1,4133 @@
+openapi: 3.0.3
+info:
+  title: 'SafeVoice API'
+  description: 'Confidential Abuse & GBV Reporting Platform — REST API. Reporters are anonymous (case code + PIN); staff authenticate with JWT.'
+  version: 1.0.0
+servers:
+  -
+    url: 'http://localhost'
+tags:
+  -
+    name: 'Public / Report intake'
+    description: "\nGuided, anonymous report intake. Mirrors the Amie conversation:\nstart -> consent -> context -> incident -> submit. Both the WhatsApp\nwebhook adapter and the web portal call these same endpoints.\n\nAfter `start`, every step requires the `X-Draft-Token` header\nreturned by `start` (drafts expire after 24h). No account, no login."
+  -
+    name: 'Public / Anonymous follow-up'
+    description: "\nPer-case authentication for reporters: every request carries\n`X-Case-Code` + `X-Case-Pin` headers (issued at submission).\nAttempts are throttled and logged; wrong code and wrong PIN return\nan identical error on purpose."
+  -
+    name: 'Staff / Authentication'
+    description: "\nStaff authentication (caseworkers, supervisors, administrators) via\nemail + password (+ optional TOTP) returning a JWT bearer token.\nReporters never authenticate here - see the Follow-up group."
+  -
+    name: 'Staff / Cases'
+    description: "\nStaff-side case operations. Row-level visibility follows the role\nmatrix: caseworkers see assigned cases, supervisors their unit,\nadministrators everything - enforced by ReportPolicy + query scope."
+  -
+    name: 'Staff / Evidence'
+    description: "\nEvidence vault access for staff. Every list view and every download\nwrites an audit entry - there is no unaudited path to evidence."
+  -
+    name: 'Staff / Case messages'
+    description: "\nStaff side of the anonymous two-way channel. Staff address the case,\nnever a person; delivery is routed through the tokenised identity."
+  -
+    name: 'Staff / Case actions'
+    description: ''
+  -
+    name: 'Staff / Referrals'
+    description: ''
+  -
+    name: 'Reference data'
+    description: "\nCase categories. Public read (the intake UI needs them); admin write\nbehind permission `reference.manage`."
+  -
+    name: Localization
+    description: "\nPublic listing of active locales; admin CRUD for enabling a new\nlanguage (adding a row is all it takes - no migration)."
+  -
+    name: CMS
+    description: "\nDynamic pages. Public resolution by slug (or localized slug) serves\nthe landing page / portal; admin CRUD behind permission `cms.manage`."
+  -
+    name: Consent
+    description: ''
+  -
+    name: 'Admin / Users'
+    description: "\nStaff account management. Requires permission `users.manage`.\nAccounts are deactivated, never hard-deleted (audit integrity)."
+  -
+    name: 'Admin / Roles & permissions'
+    description: "\nRequires permission `roles.manage`. System roles (caseworker,\nsupervisor, administrator) cannot be deleted."
+  -
+    name: 'Admin / Offices'
+    description: ''
+  -
+    name: 'Admin / Settings'
+    description: ''
+  -
+    name: 'Admin / Notification templates'
+    description: "\nReporter-facing template bodies must stay discreet: reference code\nand status wording only, never case content."
+  -
+    name: 'Admin / Audit trail'
+    description: "\nRead-only. Requires permission `audit.view`. The trail is append-only\nat the application layer - there is no update or delete endpoint."
+components:
+  securitySchemes:
+    default:
+      type: http
+      scheme: bearer
+      description: 'Obtain a token from <code>POST /api/v1/auth/login</code>. Reporter (public) endpoints use X-Case-Code / X-Case-Pin headers instead.'
+security:
+  -
+    default: []
+paths:
+  /api/v1/intake/start:
+    post:
+      summary: 'Start a report (draft)'
+      operationId: startAReportdraft
+      description: ''
+      parameters: []
+      responses:
+        201:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: true
+                  message: Created
+                  data:
+                    report_id: 9d3c...
+                    draft_token: a1B2...
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Created
+                  data:
+                    type: object
+                    properties:
+                      report_id:
+                        type: string
+                        example: 9d3c...
+                      draft_token:
+                        type: string
+                        example: a1B2...
+      tags:
+        - 'Public / Report intake'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                channel:
+                  type: string
+                  description: 'Channel key: whatsapp, web, sms, ussd.'
+                  example: web
+                locale:
+                  type: string
+                  description: 'Locale code (en, fr).'
+                  example: fr
+                phone:
+                  type: string
+                  description: 'E.164 phone; omit if the reporter declines contact.'
+                  example: '+237650000000'
+                  nullable: true
+              required:
+                - channel
+                - locale
+      security: []
+  '/api/v1/intake/{report}/consent':
+    patch:
+      summary: 'Step: consent'
+      operationId: stepConsent
+      description: ''
+      parameters:
+        -
+          in: header
+          name: X-Draft-Token
+          description: ''
+          example: a1B2c3...
+          schema:
+            type: string
+      responses:
+        500:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  message: 'Server Error'
+                properties:
+                  message:
+                    type: string
+                    example: 'Server Error'
+      tags:
+        - 'Public / Report intake'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                data_use_consent:
+                  type: boolean
+                  description: 'Must be true to proceed.'
+                  example: true
+                contact_consent:
+                  type: boolean
+                  description: 'May be false (no notifications).'
+                  example: true
+              required:
+                - data_use_consent
+                - contact_consent
+      security: []
+    parameters:
+      -
+        in: path
+        name: report
+        description: ''
+        example: consequatur
+        required: true
+        schema:
+          type: string
+  '/api/v1/intake/{report}/context':
+    patch:
+      summary: 'Step: case context'
+      operationId: stepCaseContext
+      description: ''
+      parameters:
+        -
+          in: header
+          name: X-Draft-Token
+          description: ''
+          example: a1B2c3...
+          schema:
+            type: string
+      responses:
+        500:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  message: 'Server Error'
+                properties:
+                  message:
+                    type: string
+                    example: 'Server Error'
+      tags:
+        - 'Public / Report intake'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                affected_person_type_id:
+                  type: integer
+                  description: 'Must match an existing stored value.'
+                  example: 17
+                relationship_id:
+                  type: integer
+                  description: 'Must match an existing stored value.'
+                  example: 17
+                reporting_for:
+                  type: string
+                  description: ''
+                  example: self
+                  enum:
+                    - self
+                    - other
+              required:
+                - affected_person_type_id
+                - relationship_id
+                - reporting_for
+      security: []
+    parameters:
+      -
+        in: path
+        name: report
+        description: ''
+        example: consequatur
+        required: true
+        schema:
+          type: string
+  '/api/v1/intake/{report}/incident':
+    patch:
+      summary: 'Step: incident description'
+      operationId: stepIncidentDescription
+      description: ''
+      parameters:
+        -
+          in: header
+          name: X-Draft-Token
+          description: ''
+          example: a1B2c3...
+          schema:
+            type: string
+      responses:
+        500:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  message: 'Server Error'
+                properties:
+                  message:
+                    type: string
+                    example: 'Server Error'
+      tags:
+        - 'Public / Report intake'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                category_id:
+                  type: integer
+                  description: 'Case category.'
+                  example: 1
+                description:
+                  type: string
+                  description: "The reporter's own words."
+                  example: ...
+                incident_area:
+                  type: string
+                  description: 'Approximate area only - no exact address required.'
+                  example: 'Yaoundé IV'
+                  nullable: true
+                incident_at:
+                  type: string
+                  description: 'ISO datetime.'
+                  example: '2026-06-30T18:00:00Z'
+                  nullable: true
+                is_imminent_danger:
+                  type: boolean
+                  description: 'Flags the report urgent.'
+                  example: false
+              required:
+                - category_id
+                - description
+      security: []
+    parameters:
+      -
+        in: path
+        name: report
+        description: ''
+        example: consequatur
+        required: true
+        schema:
+          type: string
+  '/api/v1/intake/{report}/submit':
+    post:
+      summary: 'Submit the report'
+      operationId: submitTheReport
+      description: "Returns the case reference code and the PIN **exactly once**.\nThere is no recovery path (anonymity trade-off): the client must\ninstruct the reporter to save both."
+      parameters:
+        -
+          in: header
+          name: X-Draft-Token
+          description: ''
+          example: a1B2c3...
+          schema:
+            type: string
+      responses:
+        200:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: true
+                  data:
+                    reference_code: SV-7F3K-9Q2
+                    pin: '482913'
+                    expected_response: 'in 2 hours'
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      reference_code:
+                        type: string
+                        example: SV-7F3K-9Q2
+                      pin:
+                        type: string
+                        example: '482913'
+                      expected_response:
+                        type: string
+                        example: 'in 2 hours'
+      tags:
+        - 'Public / Report intake'
+      security: []
+    parameters:
+      -
+        in: path
+        name: report
+        description: ''
+        example: consequatur
+        required: true
+        schema:
+          type: string
+  '/api/v1/intake/{report}/evidence':
+    post:
+      summary: 'Attach evidence after submission'
+      operationId: attachEvidenceAfterSubmission
+      description: ''
+      parameters:
+        -
+          in: header
+          name: X-Case-Code
+          description: ''
+          example: SV-7F3K-9Q2
+          schema:
+            type: string
+        -
+          in: header
+          name: X-Case-Pin
+          description: ''
+          example: '482913'
+          schema:
+            type: string
+      responses:
+        500:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  message: 'Server Error'
+                properties:
+                  message:
+                    type: string
+                    example: 'Server Error'
+      tags:
+        - 'Public / Anonymous follow-up'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: 'The evidence file (image/video/audio/document).'
+              required:
+                - file
+      security: []
+    parameters:
+      -
+        in: path
+        name: report
+        description: ''
+        example: consequatur
+        required: true
+        schema:
+          type: string
+  /api/v1/follow-up/status:
+    get:
+      summary: 'Case status (reporter view)'
+      operationId: caseStatusreporterView
+      description: ''
+      parameters:
+        -
+          in: header
+          name: X-Case-Code
+          description: ''
+          example: SV-7F3K-9Q2
+          schema:
+            type: string
+        -
+          in: header
+          name: X-Case-Pin
+          description: ''
+          example: '482913'
+          schema:
+            type: string
+      responses:
+        200:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: true
+                  data:
+                    reference_code: SV-7F3K-9Q2
+                    status: 'Being reviewed'
+                    unread_messages: 1
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      reference_code:
+                        type: string
+                        example: SV-7F3K-9Q2
+                      status:
+                        type: string
+                        example: 'Being reviewed'
+                      unread_messages:
+                        type: integer
+                        example: 1
+      tags:
+        - 'Public / Anonymous follow-up'
+      security: []
+  /api/v1/follow-up/information:
+    post:
+      summary: 'Add information'
+      operationId: addInformation
+      description: ''
+      parameters:
+        -
+          in: header
+          name: X-Case-Code
+          description: ''
+          example: SV-7F3K-9Q2
+          schema:
+            type: string
+        -
+          in: header
+          name: X-Case-Pin
+          description: ''
+          example: '482913'
+          schema:
+            type: string
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: 'The case code or PIN is incorrect.'
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: 'The case code or PIN is incorrect.'
+      tags:
+        - 'Public / Anonymous follow-up'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                body:
+                  type: string
+                  description: 'Must not be greater than 10000 characters.'
+                  example: vmqeopfuudtdsufvyvddq
+              required:
+                - body
+      security: []
+  /api/v1/follow-up/messages:
+    get:
+      summary: 'Message thread'
+      operationId: messageThread
+      description: 'Staff names are stripped: the reporter only sees sender_type.'
+      parameters:
+        -
+          in: header
+          name: X-Case-Code
+          description: ''
+          example: SV-7F3K-9Q2
+          schema:
+            type: string
+        -
+          in: header
+          name: X-Case-Pin
+          description: ''
+          example: '482913'
+          schema:
+            type: string
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: 'The case code or PIN is incorrect.'
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: 'The case code or PIN is incorrect.'
+      tags:
+        - 'Public / Anonymous follow-up'
+      security: []
+    post:
+      summary: 'Reply in the thread'
+      operationId: replyInTheThread
+      description: ''
+      parameters:
+        -
+          in: header
+          name: X-Case-Code
+          description: ''
+          example: SV-7F3K-9Q2
+          schema:
+            type: string
+        -
+          in: header
+          name: X-Case-Pin
+          description: ''
+          example: '482913'
+          schema:
+            type: string
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: 'The case code or PIN is incorrect.'
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: 'The case code or PIN is incorrect.'
+      tags:
+        - 'Public / Anonymous follow-up'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                body:
+                  type: string
+                  description: 'Must not be greater than 5000 characters.'
+                  example: vmqeopfuudtdsufvyvddq
+              required:
+                - body
+      security: []
+  /api/v1/follow-up/evidence:
+    post:
+      summary: 'Attach evidence after submission'
+      operationId: attachEvidenceAfterSubmission
+      description: ''
+      parameters:
+        -
+          in: header
+          name: X-Case-Code
+          description: ''
+          example: SV-7F3K-9Q2
+          schema:
+            type: string
+        -
+          in: header
+          name: X-Case-Pin
+          description: ''
+          example: '482913'
+          schema:
+            type: string
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: 'The case code or PIN is incorrect.'
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: 'The case code or PIN is incorrect.'
+      tags:
+        - 'Public / Anonymous follow-up'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: 'The evidence file (image/video/audio/document).'
+              required:
+                - file
+      security: []
+  /api/v1/auth/login:
+    post:
+      summary: Login
+      operationId: login
+      description: ''
+      parameters: []
+      responses:
+        200:
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: true
+                  message: OK
+                  data:
+                    access_token: eyJ...
+                    token_type: bearer
+                    expires_in: 3600
+                    user:
+                      id: ...
+                      name: Admin
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: OK
+                  data:
+                    type: object
+                    properties:
+                      access_token:
+                        type: string
+                        example: eyJ...
+                      token_type:
+                        type: string
+                        example: bearer
+                      expires_in:
+                        type: integer
+                        example: 3600
+                      user:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                            example: ...
+                          name:
+                            type: string
+                            example: Admin
+      tags:
+        - 'Staff / Authentication'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  description: 'Staff email.'
+                  example: admin@safevoice.cm
+                password:
+                  type: string
+                  description: Password.
+                  example: ChangeMe-Please-1!
+                otp:
+                  type: string
+                  description: '6-digit TOTP code, required when MFA is enabled.'
+                  example: '123456'
+                  nullable: true
+              required:
+                - email
+                - password
+      security: []
+  /api/v1/auth/refresh:
+    post:
+      summary: 'Refresh token'
+      operationId: refreshToken
+      description: ''
+      parameters: []
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - 'Staff / Authentication'
+  /api/v1/auth/me:
+    get:
+      summary: 'Current user'
+      operationId: currentUser
+      description: ''
+      parameters: []
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - 'Staff / Authentication'
+  /api/v1/auth/logout:
+    post:
+      summary: 'Logout (invalidate token)'
+      operationId: logoutinvalidateToken
+      description: ''
+      parameters: []
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - 'Staff / Authentication'
+  /api/v1/reports:
+    get:
+      summary: 'Case queue'
+      operationId: caseQueue
+      description: ''
+      parameters:
+        -
+          in: query
+          name: status_id
+          description: 'Filter by status.'
+          example: 1
+          required: false
+          schema:
+            type: integer
+            description: 'Filter by status.'
+            example: 1
+        -
+          in: query
+          name: priority_level_id
+          description: 'Filter by priority.'
+          example: 1
+          required: false
+          schema:
+            type: integer
+            description: 'Filter by priority.'
+            example: 1
+        -
+          in: query
+          name: category_id
+          description: 'Filter by category.'
+          example: 2
+          required: false
+          schema:
+            type: integer
+            description: 'Filter by category.'
+            example: 2
+        -
+          in: query
+          name: is_urgent
+          description: 'Urgent only.'
+          example: true
+          required: false
+          schema:
+            type: boolean
+            description: 'Urgent only.'
+            example: true
+        -
+          in: query
+          name: unassigned
+          description: 'Unassigned only (triage view).'
+          example: true
+          required: false
+          schema:
+            type: boolean
+            description: 'Unassigned only (triage view).'
+            example: true
+        -
+          in: query
+          name: search
+          description: 'Reference code search.'
+          example: SV-7F
+          required: false
+          schema:
+            type: string
+            description: 'Reference code search.'
+            example: SV-7F
+        -
+          in: query
+          name: per_page
+          description: 'Page size (max 100).'
+          example: 15
+          required: false
+          schema:
+            type: integer
+            description: 'Page size (max 100).'
+            example: 15
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - 'Staff / Cases'
+  '/api/v1/reports/{report_id}':
+    get:
+      summary: 'Case detail'
+      operationId: caseDetail
+      description: ''
+      parameters: []
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - 'Staff / Cases'
+    parameters:
+      -
+        in: path
+        name: report_id
+        description: 'The ID of the report.'
+        example: consequatur
+        required: true
+        schema:
+          type: string
+  '/api/v1/reports/{report_id}/status':
+    patch:
+      summary: 'Update status'
+      operationId: updateStatus
+      description: "Writes immutable case_status_history and (with consent) sends the\nreporter a discreet status notification."
+      parameters: []
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - 'Staff / Cases'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status_id:
+                  type: integer
+                  description: 'Must match an existing stored value.'
+                  example: 17
+                note:
+                  type: string
+                  description: 'Must not be greater than 500 characters.'
+                  example: mqeopfuudtdsufvyvddqa
+                  nullable: true
+              required:
+                - status_id
+    parameters:
+      -
+        in: path
+        name: report_id
+        description: 'The ID of the report.'
+        example: consequatur
+        required: true
+        schema:
+          type: string
+  '/api/v1/reports/{report_id}/assign':
+    patch:
+      summary: 'Assign case'
+      operationId: assignCase
+      description: 'Supervisor/administrator action (permission: case.assign).'
+      parameters: []
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - 'Staff / Cases'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                assigned_to:
+                  type: string
+                  description: 'Must be a valid UUID. Must match an existing stored value.'
+                  example: 66529e01-d113-3473-8d6f-9e11e09332ea
+                office_id:
+                  type: integer
+                  description: 'Must match an existing stored value.'
+                  example: 17
+                  nullable: true
+              required:
+                - assigned_to
+    parameters:
+      -
+        in: path
+        name: report_id
+        description: 'The ID of the report.'
+        example: consequatur
+        required: true
+        schema:
+          type: string
+  '/api/v1/reports/{report_id}/escalate':
+    post:
+      summary: 'Escalate as urgent'
+      operationId: escalateAsUrgent
+      description: 'Flags the case urgent and alerts unit supervisors.'
+      parameters: []
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - 'Staff / Cases'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  description: 'Must not be greater than 500 characters.'
+                  example: vmqeopfuudtdsufvyvddq
+                  nullable: true
+    parameters:
+      -
+        in: path
+        name: report_id
+        description: 'The ID of the report.'
+        example: consequatur
+        required: true
+        schema:
+          type: string
+  '/api/v1/reports/{report_id}/evidence':
+    get:
+      summary: 'List evidence for a case'
+      operationId: listEvidenceForACase
+      description: ''
+      parameters: []
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - 'Staff / Evidence'
+    post:
+      summary: 'Attach evidence (staff upload, e.g. scanned document)'
+      operationId: attachEvidencestaffUploadEgScannedDocument
+      description: ''
+      parameters: []
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - 'Staff / Evidence'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: 'Must be a file. Must not be greater than 25600 kilobytes.'
+              required:
+                - file
+    parameters:
+      -
+        in: path
+        name: report_id
+        description: 'The ID of the report.'
+        example: consequatur
+        required: true
+        schema:
+          type: string
+  '/api/v1/evidence/{evidence_id}/download':
+    get:
+      summary: 'Download (decrypt) an evidence file'
+      operationId: downloaddecryptAnEvidenceFile
+      description: "Verifies the integrity hash and writes an `evidence.downloaded`\naudit entry. CSAM-flagged items refuse download (423-style block)\noutside the restricted legal workflow."
+      parameters: []
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - 'Staff / Evidence'
+    parameters:
+      -
+        in: path
+        name: evidence_id
+        description: 'The ID of the evidence.'
+        example: consequatur
+        required: true
+        schema:
+          type: string
+  '/api/v1/reports/{report_id}/messages':
+    get:
+      summary: Thread
+      operationId: thread
+      description: ''
+      parameters: []
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - 'Staff / Case messages'
+    post:
+      summary: 'Send message to the reporter'
+      operationId: sendMessageToTheReporter
+      description: ''
+      parameters: []
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - 'Staff / Case messages'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                body:
+                  type: string
+                  description: 'Must not be greater than 5000 characters.'
+                  example: vmqeopfuudtdsufvyvddq
+              required:
+                - body
+    parameters:
+      -
+        in: path
+        name: report_id
+        description: 'The ID of the report.'
+        example: consequatur
+        required: true
+        schema:
+          type: string
+  '/api/v1/reports/{report_id}/actions':
+    get:
+      summary: 'List actions on a case'
+      operationId: listActionsOnACase
+      description: ''
+      parameters: []
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - 'Staff / Case actions'
+    post:
+      summary: 'Record an intervention'
+      operationId: recordAnIntervention
+      description: ''
+      parameters: []
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - 'Staff / Case actions'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action_type:
+                  type: string
+                  description: 'Must contain only letters, numbers, dashes and underscores. Must not be greater than 64 characters.'
+                  example: vmqeopfuudtdsufvyvddq
+                notes:
+                  type: string
+                  description: 'Must not be greater than 10000 characters.'
+                  example: amniihfqcoynlazghdtqt
+                  nullable: true
+              required:
+                - action_type
+    parameters:
+      -
+        in: path
+        name: report_id
+        description: 'The ID of the report.'
+        example: consequatur
+        required: true
+        schema:
+          type: string
+  '/api/v1/reports/{report_id}/referrals':
+    get:
+      summary: 'List referrals on a case'
+      operationId: listReferralsOnACase
+      description: ''
+      parameters: []
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - 'Staff / Referrals'
+    post:
+      summary: 'Refer to a partner (moves the case to "referred")'
+      operationId: referToAPartnermovesTheCaseToreferred
+      description: ''
+      parameters: []
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - 'Staff / Referrals'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                partner_type_id:
+                  type: integer
+                  description: 'Must match an existing stored value.'
+                  example: 17
+                partner_name:
+                  type: string
+                  description: 'Must not be greater than 150 characters.'
+                  example: mqeopfuudtdsufvyvddqa
+                  nullable: true
+                notes:
+                  type: string
+                  description: 'Must not be greater than 10000 characters.'
+                  example: mniihfqcoynlazghdtqtq
+                  nullable: true
+              required:
+                - partner_type_id
+    parameters:
+      -
+        in: path
+        name: report_id
+        description: 'The ID of the report.'
+        example: consequatur
+        required: true
+        schema:
+          type: string
+  '/api/v1/reports/{report_id}/referrals/{referral_id}':
+    patch:
+      summary: 'Update referral outcome'
+      operationId: updateReferralOutcome
+      description: ''
+      parameters: []
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - 'Staff / Referrals'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  description: ''
+                  example: pending
+                  enum:
+                    - pending
+                    - accepted
+                    - completed
+                    - declined
+                notes:
+                  type: string
+                  description: 'Must not be greater than 10000 characters.'
+                  example: vmqeopfuudtdsufvyvddq
+                  nullable: true
+              required:
+                - status
+    parameters:
+      -
+        in: path
+        name: report_id
+        description: 'The ID of the report.'
+        example: consequatur
+        required: true
+        schema:
+          type: string
+      -
+        in: path
+        name: referral_id
+        description: 'The ID of the referral.'
+        example: 17
+        required: true
+        schema:
+          type: integer
+  /api/v1/reference/categories:
+    get:
+      summary: 'List categories (localized)'
+      operationId: listCategorieslocalized
+      description: ''
+      parameters: []
+      responses:
+        200:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: true
+                  message: OK
+                  data: []
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: OK
+                  data:
+                    type: array
+                    example: []
+      tags:
+        - 'Reference data'
+      security: []
+    post:
+      summary: 'Create category'
+      operationId: createCategory
+      description: ''
+      parameters: []
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - 'Reference data'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                key:
+                  type: string
+                  description: 'Must contain only letters, numbers, dashes and underscores. Must not be greater than 64 characters.'
+                  example: vmqeopfuudtdsufvyvddq
+                parent_id:
+                  type: integer
+                  description: 'Must match an existing stored value.'
+                  example: 17
+                  nullable: true
+                severity_weight:
+                  type: integer
+                  description: 'Must be at least 0. Must not be greater than 100.'
+                  example: 13
+                sort_order:
+                  type: integer
+                  description: ''
+                  example: 17
+                is_active:
+                  type: boolean
+                  description: ''
+                  example: false
+                translations:
+                  type: array
+                  description: ''
+                  example:
+                    - []
+                  items:
+                    type: object
+                    properties:
+                      en:
+                        type: object
+                        description: ''
+                        example: []
+                        properties: {  }
+                      name:
+                        type: string
+                        description: 'This field is required when <code>translations</code> is present. Must not be greater than 150 characters.'
+                        example: vmqeopfuudtdsufvyvddq
+                      description:
+                        type: string
+                        description: 'Must not be greater than 255 characters.'
+                        example: 'Dolores molestias ipsam sit.'
+                        nullable: true
+                    required:
+                      - en
+              required:
+                - key
+                - translations
+  /api/v1/reference/statuses:
+    get:
+      summary: 'List case statuses (localized, staff + reporter labels)'
+      operationId: listCaseStatuseslocalizedStaff+ReporterLabels
+      description: ''
+      parameters: []
+      responses:
+        200:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: true
+                  message: OK
+                  data: []
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: OK
+                  data:
+                    type: array
+                    example: []
+      tags:
+        - 'Reference data'
+      security: []
+  '/api/v1/reference/lookups/{type}':
+    get:
+      summary: 'List a lookup type (localized)'
+      operationId: listALookupTypelocalized
+      description: ''
+      parameters: []
+      responses:
+        200:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: true
+                  message: OK
+                  data: []
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: OK
+                  data:
+                    type: array
+                    example: []
+      tags:
+        - 'Reference data'
+      security: []
+    post:
+      summary: 'Create entry'
+      operationId: createEntry
+      description: ''
+      parameters: []
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - 'Reference data'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                key:
+                  type: string
+                  description: 'Must contain only letters, numbers, dashes and underscores. Must not be greater than 64 characters.'
+                  example: vmqeopfuudtdsufvyvddq
+                sort_order:
+                  type: integer
+                  description: ''
+                  example: 17
+                is_active:
+                  type: boolean
+                  description: ''
+                  example: false
+                translations:
+                  type: array
+                  description: ''
+                  example:
+                    - []
+                  items:
+                    type: object
+                    properties:
+                      en:
+                        type: object
+                        description: ''
+                        example: []
+                        properties: {  }
+                      label:
+                        type: string
+                        description: 'This field is required when <code>translations</code> is present. Must not be greater than 150 characters.'
+                        example: vmqeopfuudtdsufvyvddq
+                      description:
+                        type: string
+                        description: 'Must not be greater than 255 characters.'
+                        example: 'Dolores molestias ipsam sit.'
+                        nullable: true
+                    required:
+                      - en
+              required:
+                - key
+                - translations
+    parameters:
+      -
+        in: path
+        name: type
+        description: ''
+        example: relationships
+        required: true
+        schema:
+          type: string
+  '/api/v1/reference/categories/{category_id}':
+    patch:
+      summary: 'Update category'
+      operationId: updateCategory
+      description: ''
+      parameters: []
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - 'Reference data'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                key:
+                  type: string
+                  description: 'Must contain only letters, numbers, dashes and underscores. Must not be greater than 64 characters.'
+                  example: vmqeopfuudtdsufvyvddq
+                parent_id:
+                  type: integer
+                  description: 'Must match an existing stored value.'
+                  example: 17
+                  nullable: true
+                severity_weight:
+                  type: integer
+                  description: 'Must be at least 0. Must not be greater than 100.'
+                  example: 13
+                sort_order:
+                  type: integer
+                  description: ''
+                  example: 17
+                is_active:
+                  type: boolean
+                  description: ''
+                  example: true
+                translations:
+                  type: array
+                  description: ''
+                  example: null
+                  items:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                        description: 'Must not be greater than 150 characters.'
+                        example: mqeopfuudtdsufvyvddqa
+                      description:
+                        type: string
+                        description: 'Must not be greater than 255 characters.'
+                        example: 'Molestias ipsam sit veniam sed fuga aspernatur.'
+                        nullable: true
+    delete:
+      summary: 'Delete category'
+      operationId: deleteCategory
+      description: ''
+      parameters: []
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - 'Reference data'
+    parameters:
+      -
+        in: path
+        name: category_id
+        description: 'The ID of the category.'
+        example: 17
+        required: true
+        schema:
+          type: integer
+  /api/v1/reference/priorities:
+    get:
+      summary: 'List priority levels'
+      operationId: listPriorityLevels
+      description: ''
+      parameters: []
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - 'Reference data'
+  '/api/v1/reference/lookups/{type}/{id}':
+    patch:
+      summary: 'Update entry'
+      operationId: updateEntry
+      description: ''
+      parameters: []
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - 'Reference data'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                key:
+                  type: string
+                  description: 'Must contain only letters, numbers, dashes and underscores. Must not be greater than 64 characters.'
+                  example: vmqeopfuudtdsufvyvddq
+                sort_order:
+                  type: integer
+                  description: ''
+                  example: 17
+                is_active:
+                  type: boolean
+                  description: ''
+                  example: true
+                translations:
+                  type: array
+                  description: ''
+                  example:
+                    - []
+                  items:
+                    type: object
+                    properties:
+                      en:
+                        type: object
+                        description: ''
+                        example: []
+                        properties: {  }
+                      label:
+                        type: string
+                        description: 'This field is required when <code>translations</code> is present. Must not be greater than 150 characters.'
+                        example: vmqeopfuudtdsufvyvddq
+                      description:
+                        type: string
+                        description: 'Must not be greater than 255 characters.'
+                        example: 'Dolores molestias ipsam sit.'
+                        nullable: true
+                    required:
+                      - en
+              required:
+                - key
+                - translations
+    delete:
+      summary: 'Delete entry'
+      operationId: deleteEntry
+      description: ''
+      parameters: []
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - 'Reference data'
+    parameters:
+      -
+        in: path
+        name: type
+        description: ''
+        example: consequatur
+        required: true
+        schema:
+          type: string
+      -
+        in: path
+        name: id
+        description: 'The ID of the {type}.'
+        example: consequatur
+        required: true
+        schema:
+          type: string
+  /api/v1/locales:
+    get:
+      summary: 'Active locales'
+      operationId: activeLocales
+      description: ''
+      parameters: []
+      responses:
+        200:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: true
+                  message: OK
+                  data:
+                    -
+                      id: 1
+                      code: en
+                      name: English
+                      is_default: true
+                      is_active: true
+                      sort_order: 1
+                    -
+                      id: 2
+                      code: fr
+                      name: Français
+                      is_default: false
+                      is_active: true
+                      sort_order: 2
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: OK
+                  data:
+                    type: array
+                    example:
+                      -
+                        id: 1
+                        code: en
+                        name: English
+                        is_default: true
+                        is_active: true
+                        sort_order: 1
+                      -
+                        id: 2
+                        code: fr
+                        name: Français
+                        is_default: false
+                        is_active: true
+                        sort_order: 2
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                          example: 1
+                        code:
+                          type: string
+                          example: en
+                        name:
+                          type: string
+                          example: English
+                        is_default:
+                          type: boolean
+                          example: true
+                        is_active:
+                          type: boolean
+                          example: true
+                        sort_order:
+                          type: integer
+                          example: 1
+      tags:
+        - Localization
+      security: []
+    post:
+      summary: 'Create locale'
+      operationId: createLocale
+      description: ''
+      parameters: []
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - Localization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                code:
+                  type: string
+                  description: 'Must not be greater than 5 characters.'
+                  example: vmqeo
+                name:
+                  type: string
+                  description: 'Must not be greater than 50 characters.'
+                  example: pfuudtdsufvyvddqamnii
+                is_default:
+                  type: boolean
+                  description: ''
+                  example: true
+                is_active:
+                  type: boolean
+                  description: ''
+                  example: true
+                sort_order:
+                  type: integer
+                  description: ''
+                  example: 17
+              required:
+                - code
+                - name
+  '/api/v1/locales/{locale_id}':
+    patch:
+      summary: 'Update locale'
+      operationId: updateLocale
+      description: ''
+      parameters: []
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - Localization
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                code:
+                  type: string
+                  description: 'Must not be greater than 5 characters.'
+                  example: vmqeo
+                name:
+                  type: string
+                  description: 'Must not be greater than 50 characters.'
+                  example: pfuudtdsufvyvddqamnii
+                is_default:
+                  type: boolean
+                  description: ''
+                  example: true
+                is_active:
+                  type: boolean
+                  description: ''
+                  example: false
+                sort_order:
+                  type: integer
+                  description: ''
+                  example: 17
+    parameters:
+      -
+        in: path
+        name: locale_id
+        description: 'The ID of the locale.'
+        example: 1
+        required: true
+        schema:
+          type: integer
+  '/api/v1/cms/pages/{slug}':
+    get:
+      summary: 'Public page by slug'
+      operationId: publicPageBySlug
+      description: ''
+      parameters: []
+      responses:
+        500:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  message: 'Server Error'
+                properties:
+                  message:
+                    type: string
+                    example: 'Server Error'
+      tags:
+        - CMS
+      security: []
+    parameters:
+      -
+        in: path
+        name: slug
+        description: ''
+        example: how-it-works
+        required: true
+        schema:
+          type: string
+  '/api/v1/cms/menus/{key}':
+    get:
+      summary: 'Public menu by key (localized)'
+      operationId: publicMenuByKeylocalized
+      description: ''
+      parameters: []
+      responses:
+        404:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: 'Resource not found.'
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: 'Resource not found.'
+      tags:
+        - CMS
+      security: []
+    parameters:
+      -
+        in: path
+        name: key
+        description: ''
+        example: header
+        required: true
+        schema:
+          type: string
+  /api/v1/cms/faqs:
+    get:
+      summary: 'Public FAQ list (localized)'
+      operationId: publicFAQListlocalized
+      description: ''
+      parameters: []
+      responses:
+        200:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: true
+                  message: OK
+                  data: []
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: OK
+                  data:
+                    type: array
+                    example: []
+      tags:
+        - CMS
+      security: []
+    post:
+      summary: 'Create FAQ'
+      operationId: createFAQ
+      description: ''
+      parameters: []
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - CMS
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                category:
+                  type: string
+                  description: 'Must not be greater than 64 characters.'
+                  example: vmqeopfuudtdsufvyvddq
+                  nullable: true
+                sort_order:
+                  type: integer
+                  description: ''
+                  example: 17
+                is_active:
+                  type: boolean
+                  description: ''
+                  example: false
+                translations:
+                  type: array
+                  description: ''
+                  example:
+                    - []
+                  items:
+                    type: object
+                    properties:
+                      en:
+                        type: object
+                        description: ''
+                        example: []
+                        properties: {  }
+                      question:
+                        type: string
+                        description: 'This field is required when <code>translations</code> is present. Must not be greater than 500 characters.'
+                        example: vmqeopfuudtdsufvyvddq
+                      answer:
+                        type: string
+                        description: 'This field is required when <code>translations</code> is present.'
+                        example: consequatur
+                    required:
+                      - en
+              required:
+                - translations
+  /api/v1/cms/ui-strings:
+    get:
+      summary: 'Public key -> value map for the current locale'
+      operationId: publicKeyValueMapForTheCurrentLocale
+      description: ''
+      parameters: []
+      responses:
+        200:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: true
+                  data:
+                    portal.followup.title: 'Suivre mon signalement'
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      portal.followup.title:
+                        type: string
+                        example: 'Suivre mon signalement'
+      tags:
+        - CMS
+      security: []
+    post:
+      summary: 'Create UI string'
+      operationId: createUIString
+      description: ''
+      parameters: []
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - CMS
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                key:
+                  type: string
+                  description: 'Must not be greater than 150 characters.'
+                  example: vmqeopfuudtdsufvyvddq
+                group:
+                  type: string
+                  description: 'Must not be greater than 64 characters.'
+                  example: amniihfqcoynlazghdtqt
+                  nullable: true
+                translations:
+                  type: array
+                  description: ''
+                  example:
+                    - []
+                  items:
+                    type: object
+                    properties:
+                      en:
+                        type: object
+                        description: ''
+                        example: []
+                        properties: {  }
+                      value:
+                        type: string
+                        description: 'This field is required when <code>translations</code> is present.'
+                        example: consequatur
+                    required:
+                      - en
+              required:
+                - key
+                - translations
+  /api/v1/cms/pages:
+    get:
+      summary: 'List pages (admin)'
+      operationId: listPagesadmin
+      description: ''
+      parameters: []
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - CMS
+    post:
+      summary: 'Create page'
+      operationId: createPage
+      description: ''
+      parameters: []
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - CMS
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                slug:
+                  type: string
+                  description: 'Must contain only letters, numbers, dashes and underscores. Must not be greater than 150 characters.'
+                  example: vmqeopfuudtdsufvyvddq
+                key:
+                  type: string
+                  description: 'Must contain only letters, numbers, dashes and underscores. Must not be greater than 64 characters.'
+                  example: amniihfqcoynlazghdtqt
+                  nullable: true
+                template:
+                  type: string
+                  description: 'Must not be greater than 64 characters.'
+                  example: qxbajwbpilpmufinllwlo
+                status:
+                  type: string
+                  description: ''
+                  example: published
+                  enum:
+                    - draft
+                    - published
+                parent_id:
+                  type: integer
+                  description: 'Must match an existing stored value.'
+                  example: 17
+                  nullable: true
+                sort_order:
+                  type: integer
+                  description: ''
+                  example: 17
+                translations:
+                  type: array
+                  description: ''
+                  example:
+                    - []
+                  items:
+                    type: object
+                    properties:
+                      en:
+                        type: object
+                        description: ''
+                        example: []
+                        properties: {  }
+                      title:
+                        type: string
+                        description: 'This field is required when <code>translations</code> is present. Must not be greater than 200 characters.'
+                        example: vmqeopfuudtdsufvyvddq
+                      localized_slug:
+                        type: string
+                        description: 'Must not be greater than 150 characters.'
+                        example: amniihfqcoynlazghdtqt
+                        nullable: true
+                      body:
+                        type: string
+                        description: ''
+                        example: consequatur
+                        nullable: true
+                      meta_title:
+                        type: string
+                        description: 'Must not be greater than 200 characters.'
+                        example: mqeopfuudtdsufvyvddqa
+                        nullable: true
+                      meta_description:
+                        type: string
+                        description: 'Must not be greater than 300 characters.'
+                        example: mniihfqcoynlazghdtqtq
+                        nullable: true
+                    required:
+                      - en
+              required:
+                - slug
+                - translations
+  '/api/v1/cms/pages/{id}':
+    put:
+      summary: 'Update page'
+      operationId: updatePage
+      description: ''
+      parameters: []
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - CMS
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                slug:
+                  type: string
+                  description: 'Must contain only letters, numbers, dashes and underscores. Must not be greater than 150 characters.'
+                  example: vmqeopfuudtdsufvyvddq
+                key:
+                  type: string
+                  description: 'Must contain only letters, numbers, dashes and underscores. Must not be greater than 64 characters.'
+                  example: amniihfqcoynlazghdtqt
+                  nullable: true
+                template:
+                  type: string
+                  description: 'Must not be greater than 64 characters.'
+                  example: qxbajwbpilpmufinllwlo
+                status:
+                  type: string
+                  description: ''
+                  example: draft
+                  enum:
+                    - draft
+                    - published
+                parent_id:
+                  type: integer
+                  description: 'Must match an existing stored value.'
+                  example: 17
+                  nullable: true
+                sort_order:
+                  type: integer
+                  description: ''
+                  example: 17
+                translations:
+                  type: array
+                  description: ''
+                  example: null
+                  items:
+                    type: object
+                    properties:
+                      title:
+                        type: string
+                        description: 'Must not be greater than 200 characters.'
+                        example: mqeopfuudtdsufvyvddqa
+                      localized_slug:
+                        type: string
+                        description: 'Must not be greater than 150 characters.'
+                        example: mniihfqcoynlazghdtqtq
+                        nullable: true
+                      body:
+                        type: string
+                        description: ''
+                        example: consequatur
+                        nullable: true
+                      meta_title:
+                        type: string
+                        description: 'Must not be greater than 200 characters.'
+                        example: mqeopfuudtdsufvyvddqa
+                        nullable: true
+                      meta_description:
+                        type: string
+                        description: 'Must not be greater than 300 characters.'
+                        example: mniihfqcoynlazghdtqtq
+                        nullable: true
+    delete:
+      summary: 'Delete page'
+      operationId: deletePage
+      description: ''
+      parameters: []
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - CMS
+    parameters:
+      -
+        in: path
+        name: id
+        description: 'The ID of the page.'
+        example: 17
+        required: true
+        schema:
+          type: integer
+  '/api/v1/cms/pages/{page_id}':
+    get:
+      summary: 'Show page (admin)'
+      operationId: showPageadmin
+      description: ''
+      parameters: []
+      responses:
+        500:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  message: 'Server Error'
+                properties:
+                  message:
+                    type: string
+                    example: 'Server Error'
+      tags:
+        - CMS
+    parameters:
+      -
+        in: path
+        name: page_id
+        description: 'The ID of the page.'
+        example: 17
+        required: true
+        schema:
+          type: integer
+  '/api/v1/cms/faqs/{faq_id}':
+    patch:
+      summary: 'Update FAQ'
+      operationId: updateFAQ
+      description: ''
+      parameters: []
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - CMS
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                category:
+                  type: string
+                  description: 'Must not be greater than 64 characters.'
+                  example: vmqeopfuudtdsufvyvddq
+                  nullable: true
+                sort_order:
+                  type: integer
+                  description: ''
+                  example: 17
+                is_active:
+                  type: boolean
+                  description: ''
+                  example: false
+                translations:
+                  type: array
+                  description: ''
+                  example:
+                    - []
+                  items:
+                    type: object
+                    properties:
+                      en:
+                        type: object
+                        description: ''
+                        example: []
+                        properties: {  }
+                      question:
+                        type: string
+                        description: 'This field is required when <code>translations</code> is present. Must not be greater than 500 characters.'
+                        example: vmqeopfuudtdsufvyvddq
+                      answer:
+                        type: string
+                        description: 'This field is required when <code>translations</code> is present.'
+                        example: consequatur
+                    required:
+                      - en
+              required:
+                - translations
+    delete:
+      summary: 'Delete FAQ'
+      operationId: deleteFAQ
+      description: ''
+      parameters: []
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - CMS
+    parameters:
+      -
+        in: path
+        name: faq_id
+        description: 'The ID of the faq.'
+        example: 17
+        required: true
+        schema:
+          type: integer
+  /api/v1/cms/ui-strings/all:
+    get:
+      summary: 'List UI strings (admin)'
+      operationId: listUIStringsadmin
+      description: ''
+      parameters: []
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - CMS
+  '/api/v1/cms/ui-strings/{ui_string}':
+    patch:
+      summary: 'Update UI string'
+      operationId: updateUIString
+      description: ''
+      parameters: []
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - CMS
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                key:
+                  type: string
+                  description: 'Must not be greater than 150 characters.'
+                  example: vmqeopfuudtdsufvyvddq
+                group:
+                  type: string
+                  description: 'Must not be greater than 64 characters.'
+                  example: amniihfqcoynlazghdtqt
+                  nullable: true
+                translations:
+                  type: array
+                  description: ''
+                  example:
+                    - []
+                  items:
+                    type: object
+                    properties:
+                      en:
+                        type: object
+                        description: ''
+                        example: []
+                        properties: {  }
+                      value:
+                        type: string
+                        description: 'This field is required when <code>translations</code> is present.'
+                        example: consequatur
+                    required:
+                      - en
+              required:
+                - key
+                - translations
+    parameters:
+      -
+        in: path
+        name: ui_string
+        description: ''
+        example: 17
+        required: true
+        schema:
+          type: integer
+  /api/v1/consent/active:
+    get:
+      summary: 'Active consent text (public - shown at intake step 2)'
+      operationId: activeConsentTextpublicShownAtIntakeStep2
+      description: ''
+      parameters: []
+      responses:
+        404:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: 'No active consent version is configured.'
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: 'No active consent version is configured.'
+      tags:
+        - Consent
+      security: []
+  /api/v1/consent-versions:
+    get:
+      summary: 'List versions (admin)'
+      operationId: listVersionsadmin
+      description: ''
+      parameters: []
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - Consent
+    post:
+      summary: 'Create version'
+      operationId: createVersion
+      description: ''
+      parameters: []
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - Consent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                version:
+                  type: string
+                  description: 'Must not be greater than 20 characters.'
+                  example: vmqeopfuudtdsufvy
+                effective_from:
+                  type: string
+                  description: 'Must be a valid date.'
+                  example: '2026-07-03T14:14:58'
+                is_active:
+                  type: boolean
+                  description: ''
+                  example: true
+                translations:
+                  type: array
+                  description: ''
+                  example:
+                    - []
+                  items:
+                    type: object
+                    properties:
+                      en:
+                        type: object
+                        description: ''
+                        example: []
+                        properties: {  }
+                      body:
+                        type: string
+                        description: 'This field is required when <code>translations</code> is present.'
+                        example: consequatur
+                    required:
+                      - en
+              required:
+                - version
+                - effective_from
+                - translations
+  /api/v1/users:
+    get:
+      summary: 'List staff users'
+      operationId: listStaffUsers
+      description: ''
+      parameters:
+        -
+          in: query
+          name: role_id
+          description: ''
+          example: 1
+          required: false
+          schema:
+            type: integer
+            description: ''
+            example: 1
+        -
+          in: query
+          name: office_id
+          description: ''
+          example: 1
+          required: false
+          schema:
+            type: integer
+            description: ''
+            example: 1
+        -
+          in: query
+          name: is_active
+          description: ''
+          example: true
+          required: false
+          schema:
+            type: boolean
+            description: ''
+            example: true
+        -
+          in: query
+          name: search
+          description: 'Name/email search.'
+          example: aiche
+          required: false
+          schema:
+            type: string
+            description: 'Name/email search.'
+            example: aiche
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - 'Admin / Users'
+    post:
+      summary: 'Create staff user'
+      operationId: createStaffUser
+      description: ''
+      parameters: []
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - 'Admin / Users'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: 'Must not be greater than 150 characters.'
+                  example: vmqeopfuudtdsufvyvddq
+                email:
+                  type: string
+                  description: 'Must be a valid email address. Must not be greater than 190 characters.'
+                  example: kunde.eloisa@example.com
+                phone:
+                  type: string
+                  description: 'Must not be greater than 30 characters.'
+                  example: hfqcoynlazghdtqtqxbaj
+                  nullable: true
+                password:
+                  type: string
+                  description: 'Must be at least 12 characters.'
+                  example: "'YAKYLk4>SJIrIV#lz."
+                role_id:
+                  type: integer
+                  description: 'Must match an existing stored value.'
+                  example: 17
+                office_id:
+                  type: integer
+                  description: 'Must match an existing stored value.'
+                  example: 17
+                  nullable: true
+                is_active:
+                  type: boolean
+                  description: ''
+                  example: false
+              required:
+                - name
+                - email
+                - password
+                - role_id
+  '/api/v1/users/{id}':
+    get:
+      summary: 'Show staff user'
+      operationId: showStaffUser
+      description: ''
+      parameters: []
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - 'Admin / Users'
+    put:
+      summary: 'Update staff user'
+      operationId: updateStaffUser
+      description: ''
+      parameters: []
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - 'Admin / Users'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: 'Must not be greater than 150 characters.'
+                  example: vmqeopfuudtdsufvyvddq
+                email:
+                  type: string
+                  description: 'Must be a valid email address. Must not be greater than 190 characters.'
+                  example: kunde.eloisa@example.com
+                phone:
+                  type: string
+                  description: 'Must not be greater than 30 characters.'
+                  example: hfqcoynlazghdtqtqxbaj
+                  nullable: true
+                password:
+                  type: string
+                  description: 'Must be at least 12 characters.'
+                  example: "'YAKYLk4>SJIrIV#lz."
+                  nullable: true
+                role_id:
+                  type: integer
+                  description: 'Must match an existing stored value.'
+                  example: 17
+                office_id:
+                  type: integer
+                  description: 'Must match an existing stored value.'
+                  example: 17
+                  nullable: true
+                is_active:
+                  type: boolean
+                  description: ''
+                  example: true
+    delete:
+      summary: 'Deactivate staff user'
+      operationId: deactivateStaffUser
+      description: ''
+      parameters: []
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - 'Admin / Users'
+    parameters:
+      -
+        in: path
+        name: id
+        description: 'The ID of the user.'
+        example: consequatur
+        required: true
+        schema:
+          type: string
+  /api/v1/roles/permissions:
+    get:
+      summary: 'All permission keys (for the role editor)'
+      operationId: allPermissionKeysforTheRoleEditor
+      description: ''
+      parameters: []
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - 'Admin / Roles & permissions'
+  /api/v1/roles:
+    get:
+      summary: 'List roles'
+      operationId: listRoles
+      description: ''
+      parameters: []
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - 'Admin / Roles & permissions'
+    post:
+      summary: 'Create role'
+      operationId: createRole
+      description: ''
+      parameters: []
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - 'Admin / Roles & permissions'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                key:
+                  type: string
+                  description: 'Must contain only letters, numbers, dashes and underscores. Must not be greater than 64 characters.'
+                  example: vmqeopfuudtdsufvyvddq
+                permissions:
+                  type: array
+                  description: 'Must match an existing stored value.'
+                  example:
+                    - 17
+                  items:
+                    type: integer
+                translations:
+                  type: array
+                  description: ''
+                  example:
+                    - []
+                  items:
+                    type: object
+                    properties:
+                      en:
+                        type: object
+                        description: ''
+                        example: []
+                        properties: {  }
+                      label:
+                        type: string
+                        description: 'This field is required when <code>translations</code> is present. Must not be greater than 100 characters.'
+                        example: vmqeopfuudtdsufvyvddq
+                      description:
+                        type: string
+                        description: 'Must not be greater than 255 characters.'
+                        example: 'Dolores molestias ipsam sit.'
+                        nullable: true
+                    required:
+                      - en
+              required:
+                - key
+                - translations
+  '/api/v1/roles/{id}':
+    get:
+      summary: 'Show role'
+      operationId: showRole
+      description: ''
+      parameters: []
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - 'Admin / Roles & permissions'
+    put:
+      summary: 'Update role'
+      operationId: updateRole
+      description: ''
+      parameters: []
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - 'Admin / Roles & permissions'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                key:
+                  type: string
+                  description: 'Must contain only letters, numbers, dashes and underscores. Must not be greater than 64 characters.'
+                  example: vmqeopfuudtdsufvyvddq
+                permissions:
+                  type: array
+                  description: 'Must match an existing stored value.'
+                  example:
+                    - 17
+                  items:
+                    type: integer
+                translations:
+                  type: array
+                  description: ''
+                  example: null
+                  items:
+                    type: object
+                    properties:
+                      label:
+                        type: string
+                        description: 'Must not be greater than 100 characters.'
+                        example: mqeopfuudtdsufvyvddqa
+                      description:
+                        type: string
+                        description: 'Must not be greater than 255 characters.'
+                        example: 'Molestias ipsam sit veniam sed fuga aspernatur.'
+                        nullable: true
+    delete:
+      summary: 'Delete role (non-system only)'
+      operationId: deleteRolenonSystemOnly
+      description: ''
+      parameters: []
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - 'Admin / Roles & permissions'
+    parameters:
+      -
+        in: path
+        name: id
+        description: 'The ID of the role.'
+        example: 1
+        required: true
+        schema:
+          type: integer
+  /api/v1/offices:
+    get:
+      summary: 'List offices'
+      operationId: listOffices
+      description: ''
+      parameters: []
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - 'Admin / Offices'
+    post:
+      summary: 'Create office'
+      operationId: createOffice
+      description: ''
+      parameters: []
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - 'Admin / Offices'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                key:
+                  type: string
+                  description: 'Must contain only letters, numbers, dashes and underscores. Must not be greater than 64 characters.'
+                  example: vmqeopfuudtdsufvyvddq
+                region:
+                  type: string
+                  description: 'Must not be greater than 100 characters.'
+                  example: amniihfqcoynlazghdtqt
+                  nullable: true
+                is_active:
+                  type: boolean
+                  description: ''
+                  example: true
+                translations:
+                  type: array
+                  description: ''
+                  example:
+                    - []
+                  items:
+                    type: object
+                    properties:
+                      en:
+                        type: object
+                        description: ''
+                        example: []
+                        properties: {  }
+                      name:
+                        type: string
+                        description: 'This field is required when <code>translations</code> is present. Must not be greater than 150 characters.'
+                        example: vmqeopfuudtdsufvyvddq
+                    required:
+                      - en
+              required:
+                - key
+                - translations
+  '/api/v1/offices/{id}':
+    get:
+      summary: 'Show office'
+      operationId: showOffice
+      description: ''
+      parameters: []
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - 'Admin / Offices'
+    put:
+      summary: 'Update office'
+      operationId: updateOffice
+      description: ''
+      parameters: []
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - 'Admin / Offices'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                key:
+                  type: string
+                  description: 'Must contain only letters, numbers, dashes and underscores. Must not be greater than 64 characters.'
+                  example: vmqeopfuudtdsufvyvddq
+                region:
+                  type: string
+                  description: 'Must not be greater than 100 characters.'
+                  example: amniihfqcoynlazghdtqt
+                  nullable: true
+                is_active:
+                  type: boolean
+                  description: ''
+                  example: true
+                translations:
+                  type: array
+                  description: ''
+                  example: null
+                  items:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                        description: 'Must not be greater than 150 characters.'
+                        example: qxbajwbpilpmufinllwlo
+    delete:
+      summary: 'Delete office'
+      operationId: deleteOffice
+      description: ''
+      parameters: []
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - 'Admin / Offices'
+    parameters:
+      -
+        in: path
+        name: id
+        description: 'The ID of the office.'
+        example: 17
+        required: true
+        schema:
+          type: integer
+  /api/v1/cms/settings:
+    get:
+      summary: 'Public settings (whitelisted keys only)'
+      operationId: publicSettingswhitelistedKeysOnly
+      description: ''
+      parameters: []
+      responses:
+        200:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: true
+                  message: OK
+                  data:
+                    site.tagline: null
+                    whatsapp.number: null
+                    site.emergency_notice: null
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: OK
+                  data:
+                    type: object
+                    properties:
+                      site.tagline:
+                        type: string
+                        example: null
+                        nullable: true
+                      whatsapp.number:
+                        type: string
+                        example: null
+                        nullable: true
+                      site.emergency_notice:
+                        type: string
+                        example: null
+                        nullable: true
+      tags:
+        - 'Admin / Settings'
+      security: []
+  /api/v1/settings:
+    get:
+      summary: 'List all settings'
+      operationId: listAllSettings
+      description: ''
+      parameters: []
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - 'Admin / Settings'
+  '/api/v1/settings/{setting_id}':
+    patch:
+      summary: 'Update a setting'
+      operationId: updateASetting
+      description: ''
+      parameters: []
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - 'Admin / Settings'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                value:
+                  type: string
+                  description: ''
+                  example: consequatur
+                  nullable: true
+                translations:
+                  type: array
+                  description: ''
+                  example: null
+                  items:
+                    type: object
+                    properties:
+                      value:
+                        type: string
+                        description: ''
+                        example: consequatur
+    parameters:
+      -
+        in: path
+        name: setting_id
+        description: 'The ID of the setting.'
+        example: 17
+        required: true
+        schema:
+          type: integer
+  /api/v1/notification-templates:
+    get:
+      summary: 'List templates'
+      operationId: listTemplates
+      description: ''
+      parameters: []
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - 'Admin / Notification templates'
+    post:
+      summary: 'Create template'
+      operationId: createTemplate
+      description: ''
+      parameters: []
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - 'Admin / Notification templates'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                key:
+                  type: string
+                  description: 'Must contain only letters, numbers, dashes and underscores. Must not be greater than 100 characters.'
+                  example: vmqeopfuudtdsufvyvddq
+                channel:
+                  type: string
+                  description: ''
+                  example: push
+                  enum:
+                    - whatsapp
+                    - sms
+                    - email
+                    - push
+                    - portal
+                whatsapp_template_name:
+                  type: string
+                  description: 'Must not be greater than 150 characters.'
+                  example: amniihfqcoynlazghdtqt
+                  nullable: true
+                is_active:
+                  type: boolean
+                  description: ''
+                  example: true
+                translations:
+                  type: array
+                  description: ''
+                  example:
+                    - []
+                  items:
+                    type: object
+                    properties:
+                      en:
+                        type: object
+                        description: ''
+                        example: []
+                        properties: {  }
+                      subject:
+                        type: string
+                        description: 'Must not be greater than 255 characters.'
+                        example: vmqeopfuudtdsufvyvddq
+                        nullable: true
+                      body:
+                        type: string
+                        description: 'This field is required when <code>translations</code> is present.'
+                        example: consequatur
+                    required:
+                      - en
+              required:
+                - key
+                - channel
+                - translations
+  '/api/v1/notification-templates/{template_id}':
+    patch:
+      summary: 'Update template'
+      operationId: updateTemplate
+      description: ''
+      parameters: []
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - 'Admin / Notification templates'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                key:
+                  type: string
+                  description: 'Must contain only letters, numbers, dashes and underscores. Must not be greater than 100 characters.'
+                  example: vmqeopfuudtdsufvyvddq
+                channel:
+                  type: string
+                  description: ''
+                  example: sms
+                  enum:
+                    - whatsapp
+                    - sms
+                    - email
+                    - push
+                    - portal
+                whatsapp_template_name:
+                  type: string
+                  description: 'Must not be greater than 150 characters.'
+                  example: amniihfqcoynlazghdtqt
+                  nullable: true
+                is_active:
+                  type: boolean
+                  description: ''
+                  example: true
+                translations:
+                  type: array
+                  description: ''
+                  example:
+                    - []
+                  items:
+                    type: object
+                    properties:
+                      en:
+                        type: object
+                        description: ''
+                        example: []
+                        properties: {  }
+                      subject:
+                        type: string
+                        description: 'Must not be greater than 255 characters.'
+                        example: vmqeopfuudtdsufvyvddq
+                        nullable: true
+                      body:
+                        type: string
+                        description: 'This field is required when <code>translations</code> is present.'
+                        example: consequatur
+                    required:
+                      - en
+              required:
+                - key
+                - channel
+                - translations
+    parameters:
+      -
+        in: path
+        name: template_id
+        description: 'The ID of the template.'
+        example: 17
+        required: true
+        schema:
+          type: integer
+  /api/v1/audit-logs:
+    get:
+      summary: 'Search audit entries'
+      operationId: searchAuditEntries
+      description: ''
+      parameters:
+        -
+          in: query
+          name: action
+          description: 'Prefix filter, e.g. evidence.'
+          example: evidence.
+          required: false
+          schema:
+            type: string
+            description: 'Prefix filter, e.g. evidence.'
+            example: evidence.
+        -
+          in: query
+          name: user_id
+          description: 'Staff uuid.'
+          example: 9d3c...
+          required: false
+          schema:
+            type: string
+            description: 'Staff uuid.'
+            example: 9d3c...
+        -
+          in: query
+          name: from
+          description: 'ISO date.'
+          example: '2026-07-01'
+          required: false
+          schema:
+            type: string
+            description: 'ISO date.'
+            example: '2026-07-01'
+        -
+          in: query
+          name: to
+          description: 'ISO date.'
+          example: '2026-07-02'
+          required: false
+          schema:
+            type: string
+            description: 'ISO date.'
+            example: '2026-07-02'
+      responses:
+        401:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  success: false
+                  message: Unauthenticated.
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthenticated.
+      tags:
+        - 'Admin / Audit trail'

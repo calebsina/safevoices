@@ -1,0 +1,198 @@
+name: 'Staff / Evidence'
+description: |-
+
+  Evidence vault access for staff. Every list view and every download
+  writes an audit entry - there is no unaudited path to evidence.
+endpoints:
+  -
+    custom: []
+    httpMethods:
+      - GET
+    uri: 'api/v1/reports/{report_id}/evidence'
+    metadata:
+      custom: []
+      groupName: 'Staff / Evidence'
+      groupDescription: |-
+
+        Evidence vault access for staff. Every list view and every download
+        writes an audit entry - there is no unaudited path to evidence.
+      subgroup: ''
+      subgroupDescription: ''
+      title: 'List evidence for a case'
+      description: ''
+      authenticated: true
+      deprecated: false
+    headers:
+      Authorization: 'Bearer {JWT_TOKEN}'
+      Content-Type: application/json
+      Accept: application/json
+    urlParameters:
+      report_id:
+        custom: []
+        name: report_id
+        description: 'The ID of the report.'
+        required: true
+        example: consequatur
+        type: string
+        enumValues: []
+        exampleWasSpecified: false
+        nullable: false
+        deprecated: false
+    cleanUrlParameters:
+      report_id: consequatur
+    queryParameters: []
+    cleanQueryParameters: []
+    bodyParameters: []
+    cleanBodyParameters: []
+    fileParameters: []
+    responses:
+      -
+        custom: []
+        status: 401
+        content: '{"success":false,"message":"Unauthenticated."}'
+        headers:
+          cache-control: 'no-cache, private'
+          content-type: application/json
+          access-control-allow-origin: '*'
+        description: null
+    responseFields: []
+    auth:
+      - headers
+      - Authorization
+      - 'Bearer 3V5EgbkvZcDPa166h8fd4ae'
+    controller: null
+    method: null
+    route: null
+  -
+    custom: []
+    httpMethods:
+      - POST
+    uri: 'api/v1/reports/{report_id}/evidence'
+    metadata:
+      custom: []
+      groupName: 'Staff / Evidence'
+      groupDescription: |-
+
+        Evidence vault access for staff. Every list view and every download
+        writes an audit entry - there is no unaudited path to evidence.
+      subgroup: ''
+      subgroupDescription: ''
+      title: 'Attach evidence (staff upload, e.g. scanned document)'
+      description: ''
+      authenticated: true
+      deprecated: false
+    headers:
+      Authorization: 'Bearer {JWT_TOKEN}'
+      Content-Type: multipart/form-data
+      Accept: application/json
+    urlParameters:
+      report_id:
+        custom: []
+        name: report_id
+        description: 'The ID of the report.'
+        required: true
+        example: consequatur
+        type: string
+        enumValues: []
+        exampleWasSpecified: false
+        nullable: false
+        deprecated: false
+    cleanUrlParameters:
+      report_id: consequatur
+    queryParameters: []
+    cleanQueryParameters: []
+    bodyParameters:
+      file:
+        custom: []
+        name: file
+        description: 'Must be a file. Must not be greater than 25600 kilobytes.'
+        required: true
+        example: null
+        type: file
+        enumValues: []
+        exampleWasSpecified: false
+        nullable: false
+        deprecated: false
+    cleanBodyParameters: []
+    fileParameters:
+      file: null
+    responses:
+      -
+        custom: []
+        status: 401
+        content: '{"success":false,"message":"Unauthenticated."}'
+        headers:
+          cache-control: 'no-cache, private'
+          content-type: application/json
+          access-control-allow-origin: '*'
+        description: null
+    responseFields: []
+    auth:
+      - headers
+      - Authorization
+      - 'Bearer 3V5EgbkvZcDPa166h8fd4ae'
+    controller: null
+    method: null
+    route: null
+  -
+    custom: []
+    httpMethods:
+      - GET
+    uri: 'api/v1/evidence/{evidence_id}/download'
+    metadata:
+      custom: []
+      groupName: 'Staff / Evidence'
+      groupDescription: |-
+
+        Evidence vault access for staff. Every list view and every download
+        writes an audit entry - there is no unaudited path to evidence.
+      subgroup: ''
+      subgroupDescription: ''
+      title: 'Download (decrypt) an evidence file'
+      description: |-
+        Verifies the integrity hash and writes an `evidence.downloaded`
+        audit entry. CSAM-flagged items refuse download (423-style block)
+        outside the restricted legal workflow.
+      authenticated: true
+      deprecated: false
+    headers:
+      Authorization: 'Bearer {JWT_TOKEN}'
+      Content-Type: application/json
+      Accept: application/json
+    urlParameters:
+      evidence_id:
+        custom: []
+        name: evidence_id
+        description: 'The ID of the evidence.'
+        required: true
+        example: consequatur
+        type: string
+        enumValues: []
+        exampleWasSpecified: false
+        nullable: false
+        deprecated: false
+    cleanUrlParameters:
+      evidence_id: consequatur
+    queryParameters: []
+    cleanQueryParameters: []
+    bodyParameters: []
+    cleanBodyParameters: []
+    fileParameters: []
+    responses:
+      -
+        custom: []
+        status: 401
+        content: '{"success":false,"message":"Unauthenticated."}'
+        headers:
+          cache-control: 'no-cache, private'
+          content-type: application/json
+          access-control-allow-origin: '*'
+        description: null
+    responseFields: []
+    auth:
+      - headers
+      - Authorization
+      - 'Bearer 3V5EgbkvZcDPa166h8fd4ae'
+    controller: null
+    method: null
+    route: null

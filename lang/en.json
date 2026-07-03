@@ -1,0 +1,22 @@
+{
+    "messages.success": "OK",
+    "messages.created": "Created",
+    "messages.deleted": "Deleted",
+    "messages.validation_failed": "The given data was invalid.",
+    "messages.unauthenticated": "Unauthenticated.",
+    "messages.forbidden": "You do not have permission to perform this action.",
+    "messages.not_found": "Resource not found.",
+    "messages.auth.invalid_credentials": "These credentials do not match our records.",
+    "messages.auth.account_disabled": "This account has been deactivated.",
+    "messages.auth.otp_required": "A one-time code is required for this account.",
+    "messages.auth.otp_invalid": "The one-time code is invalid.",
+    "messages.follow_up.credentials_required": "A case code and PIN are required.",
+    "messages.follow_up.too_many_attempts": "Too many attempts. Please try again later.",
+    "messages.follow_up.invalid_credentials": "The case code or PIN is incorrect.",
+    "messages.intake.invalid_draft": "This report draft is invalid or has expired.",
+    "messages.intake.no_consent_version": "No active consent version is configured.",
+    "messages.intake.incomplete": "The report is incomplete. Consent, category and description are required.",
+    "messages.role.system_protected": "System roles cannot be deleted.",
+    "messages.evidence.csam_restricted": "This item is restricted to the legal handling workflow.",
+    "messages.evidence.integrity_failed": "Integrity verification failed for this evidence item."
+}

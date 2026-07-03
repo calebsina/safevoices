@@ -1,0 +1,22 @@
+{
+    "messages.success": "OK",
+    "messages.created": "Créé",
+    "messages.deleted": "Supprimé",
+    "messages.validation_failed": "Les données fournies sont invalides.",
+    "messages.unauthenticated": "Non authentifié.",
+    "messages.forbidden": "Vous n'avez pas la permission d'effectuer cette action.",
+    "messages.not_found": "Ressource introuvable.",
+    "messages.auth.invalid_credentials": "Ces identifiants ne correspondent pas à nos enregistrements.",
+    "messages.auth.account_disabled": "Ce compte a été désactivé.",
+    "messages.auth.otp_required": "Un code à usage unique est requis pour ce compte.",
+    "messages.auth.otp_invalid": "Le code à usage unique est invalide.",
+    "messages.follow_up.credentials_required": "Un code de dossier et un code PIN sont requis.",
+    "messages.follow_up.too_many_attempts": "Trop de tentatives. Veuillez réessayer plus tard.",
+    "messages.follow_up.invalid_credentials": "Le code de dossier ou le PIN est incorrect.",
+    "messages.intake.invalid_draft": "Ce brouillon de signalement est invalide ou a expiré.",
+    "messages.intake.no_consent_version": "Aucune version de consentement active n'est configurée.",
+    "messages.intake.incomplete": "Le signalement est incomplet. Le consentement, la catégorie et la description sont requis.",
+    "messages.role.system_protected": "Les rôles système ne peuvent pas être supprimés.",
+    "messages.evidence.csam_restricted": "Cet élément est réservé à la procédure de traitement légal.",
+    "messages.evidence.integrity_failed": "La vérification d'intégrité a échoué pour cet élément de preuve."
+}

@@ -1,0 +1,441 @@
+name: 'Staff / Cases'
+description: |-
+
+  Staff-side case operations. Row-level visibility follows the role
+  matrix: caseworkers see assigned cases, supervisors their unit,
+  administrators everything - enforced by ReportPolicy + query scope.
+endpoints:
+  -
+    custom: []
+    httpMethods:
+      - GET
+    uri: api/v1/reports
+    metadata:
+      custom: []
+      groupName: 'Staff / Cases'
+      groupDescription: |-
+
+        Staff-side case operations. Row-level visibility follows the role
+        matrix: caseworkers see assigned cases, supervisors their unit,
+        administrators everything - enforced by ReportPolicy + query scope.
+      subgroup: ''
+      subgroupDescription: ''
+      title: 'Case queue'
+      description: ''
+      authenticated: true
+      deprecated: false
+    headers:
+      Authorization: 'Bearer {JWT_TOKEN}'
+      Content-Type: application/json
+      Accept: application/json
+    urlParameters: []
+    cleanUrlParameters: []
+    queryParameters:
+      status_id:
+        custom: []
+        name: status_id
+        description: 'Filter by status.'
+        required: false
+        example: 1
+        type: integer
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+      priority_level_id:
+        custom: []
+        name: priority_level_id
+        description: 'Filter by priority.'
+        required: false
+        example: 1
+        type: integer
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+      category_id:
+        custom: []
+        name: category_id
+        description: 'Filter by category.'
+        required: false
+        example: 2
+        type: integer
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+      is_urgent:
+        custom: []
+        name: is_urgent
+        description: 'Urgent only.'
+        required: false
+        example: true
+        type: boolean
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+      unassigned:
+        custom: []
+        name: unassigned
+        description: 'Unassigned only (triage view).'
+        required: false
+        example: true
+        type: boolean
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+      search:
+        custom: []
+        name: search
+        description: 'Reference code search.'
+        required: false
+        example: SV-7F
+        type: string
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+      per_page:
+        custom: []
+        name: per_page
+        description: 'Page size (max 100).'
+        required: false
+        example: 15
+        type: integer
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+    cleanQueryParameters:
+      status_id: 1
+      priority_level_id: 1
+      category_id: 2
+      is_urgent: true
+      unassigned: true
+      search: SV-7F
+      per_page: 15
+    bodyParameters: []
+    cleanBodyParameters: []
+    fileParameters: []
+    responses:
+      -
+        custom: []
+        status: 401
+        content: '{"success":false,"message":"Unauthenticated."}'
+        headers:
+          cache-control: 'no-cache, private'
+          content-type: application/json
+          access-control-allow-origin: '*'
+        description: null
+    responseFields: []
+    auth:
+      - headers
+      - Authorization
+      - 'Bearer 3V5EgbkvZcDPa166h8fd4ae'
+    controller: null
+    method: null
+    route: null
+  -
+    custom: []
+    httpMethods:
+      - GET
+    uri: 'api/v1/reports/{report_id}'
+    metadata:
+      custom: []
+      groupName: 'Staff / Cases'
+      groupDescription: |-
+
+        Staff-side case operations. Row-level visibility follows the role
+        matrix: caseworkers see assigned cases, supervisors their unit,
+        administrators everything - enforced by ReportPolicy + query scope.
+      subgroup: ''
+      subgroupDescription: ''
+      title: 'Case detail'
+      description: ''
+      authenticated: true
+      deprecated: false
+    headers:
+      Authorization: 'Bearer {JWT_TOKEN}'
+      Content-Type: application/json
+      Accept: application/json
+    urlParameters:
+      report_id:
+        custom: []
+        name: report_id
+        description: 'The ID of the report.'
+        required: true
+        example: consequatur
+        type: string
+        enumValues: []
+        exampleWasSpecified: false
+        nullable: false
+        deprecated: false
+    cleanUrlParameters:
+      report_id: consequatur
+    queryParameters: []
+    cleanQueryParameters: []
+    bodyParameters: []
+    cleanBodyParameters: []
+    fileParameters: []
+    responses:
+      -
+        custom: []
+        status: 401
+        content: '{"success":false,"message":"Unauthenticated."}'
+        headers:
+          cache-control: 'no-cache, private'
+          content-type: application/json
+          access-control-allow-origin: '*'
+        description: null
+    responseFields: []
+    auth:
+      - headers
+      - Authorization
+      - 'Bearer 3V5EgbkvZcDPa166h8fd4ae'
+    controller: null
+    method: null
+    route: null
+  -
+    custom: []
+    httpMethods:
+      - PATCH
+    uri: 'api/v1/reports/{report_id}/status'
+    metadata:
+      custom: []
+      groupName: 'Staff / Cases'
+      groupDescription: |-
+
+        Staff-side case operations. Row-level visibility follows the role
+        matrix: caseworkers see assigned cases, supervisors their unit,
+        administrators everything - enforced by ReportPolicy + query scope.
+      subgroup: ''
+      subgroupDescription: ''
+      title: 'Update status'
+      description: |-
+        Writes immutable case_status_history and (with consent) sends the
+        reporter a discreet status notification.
+      authenticated: true
+      deprecated: false
+    headers:
+      Authorization: 'Bearer {JWT_TOKEN}'
+      Content-Type: application/json
+      Accept: application/json
+    urlParameters:
+      report_id:
+        custom: []
+        name: report_id
+        description: 'The ID of the report.'
+        required: true
+        example: consequatur
+        type: string
+        enumValues: []
+        exampleWasSpecified: false
+        nullable: false
+        deprecated: false
+    cleanUrlParameters:
+      report_id: consequatur
+    queryParameters: []
+    cleanQueryParameters: []
+    bodyParameters:
+      status_id:
+        custom: []
+        name: status_id
+        description: 'Must match an existing stored value.'
+        required: true
+        example: 17
+        type: integer
+        enumValues: []
+        exampleWasSpecified: false
+        nullable: false
+        deprecated: false
+      note:
+        custom: []
+        name: note
+        description: 'Must not be greater than 500 characters.'
+        required: false
+        example: mqeopfuudtdsufvyvddqa
+        type: string
+        enumValues: []
+        exampleWasSpecified: false
+        nullable: true
+        deprecated: false
+    cleanBodyParameters:
+      status_id: 17
+      note: mqeopfuudtdsufvyvddqa
+    fileParameters: []
+    responses:
+      -
+        custom: []
+        status: 401
+        content: '{"success":false,"message":"Unauthenticated."}'
+        headers:
+          cache-control: 'no-cache, private'
+          content-type: application/json
+          access-control-allow-origin: '*'
+        description: null
+    responseFields: []
+    auth:
+      - headers
+      - Authorization
+      - 'Bearer 3V5EgbkvZcDPa166h8fd4ae'
+    controller: null
+    method: null
+    route: null
+  -
+    custom: []
+    httpMethods:
+      - PATCH
+    uri: 'api/v1/reports/{report_id}/assign'
+    metadata:
+      custom: []
+      groupName: 'Staff / Cases'
+      groupDescription: |-
+
+        Staff-side case operations. Row-level visibility follows the role
+        matrix: caseworkers see assigned cases, supervisors their unit,
+        administrators everything - enforced by ReportPolicy + query scope.
+      subgroup: ''
+      subgroupDescription: ''
+      title: 'Assign case'
+      description: 'Supervisor/administrator action (permission: case.assign).'
+      authenticated: true
+      deprecated: false
+    headers:
+      Authorization: 'Bearer {JWT_TOKEN}'
+      Content-Type: application/json
+      Accept: application/json
+    urlParameters:
+      report_id:
+        custom: []
+        name: report_id
+        description: 'The ID of the report.'
+        required: true
+        example: consequatur
+        type: string
+        enumValues: []
+        exampleWasSpecified: false
+        nullable: false
+        deprecated: false
+    cleanUrlParameters:
+      report_id: consequatur
+    queryParameters: []
+    cleanQueryParameters: []
+    bodyParameters:
+      assigned_to:
+        custom: []
+        name: assigned_to
+        description: 'Must be a valid UUID. Must match an existing stored value.'
+        required: true
+        example: 66529e01-d113-3473-8d6f-9e11e09332ea
+        type: string
+        enumValues: []
+        exampleWasSpecified: false
+        nullable: false
+        deprecated: false
+      office_id:
+        custom: []
+        name: office_id
+        description: 'Must match an existing stored value.'
+        required: false
+        example: 17
+        type: integer
+        enumValues: []
+        exampleWasSpecified: false
+        nullable: true
+        deprecated: false
+    cleanBodyParameters:
+      assigned_to: 66529e01-d113-3473-8d6f-9e11e09332ea
+      office_id: 17
+    fileParameters: []
+    responses:
+      -
+        custom: []
+        status: 401
+        content: '{"success":false,"message":"Unauthenticated."}'
+        headers:
+          cache-control: 'no-cache, private'
+          content-type: application/json
+          access-control-allow-origin: '*'
+        description: null
+    responseFields: []
+    auth:
+      - headers
+      - Authorization
+      - 'Bearer 3V5EgbkvZcDPa166h8fd4ae'
+    controller: null
+    method: null
+    route: null
+  -
+    custom: []
+    httpMethods:
+      - POST
+    uri: 'api/v1/reports/{report_id}/escalate'
+    metadata:
+      custom: []
+      groupName: 'Staff / Cases'
+      groupDescription: |-
+
+        Staff-side case operations. Row-level visibility follows the role
+        matrix: caseworkers see assigned cases, supervisors their unit,
+        administrators everything - enforced by ReportPolicy + query scope.
+      subgroup: ''
+      subgroupDescription: ''
+      title: 'Escalate as urgent'
+      description: 'Flags the case urgent and alerts unit supervisors.'
+      authenticated: true
+      deprecated: false
+    headers:
+      Authorization: 'Bearer {JWT_TOKEN}'
+      Content-Type: application/json
+      Accept: application/json
+    urlParameters:
+      report_id:
+        custom: []
+        name: report_id
+        description: 'The ID of the report.'
+        required: true
+        example: consequatur
+        type: string
+        enumValues: []
+        exampleWasSpecified: false
+        nullable: false
+        deprecated: false
+    cleanUrlParameters:
+      report_id: consequatur
+    queryParameters: []
+    cleanQueryParameters: []
+    bodyParameters:
+      reason:
+        custom: []
+        name: reason
+        description: 'Must not be greater than 500 characters.'
+        required: false
+        example: vmqeopfuudtdsufvyvddq
+        type: string
+        enumValues: []
+        exampleWasSpecified: false
+        nullable: true
+        deprecated: false
+    cleanBodyParameters:
+      reason: vmqeopfuudtdsufvyvddq
+    fileParameters: []
+    responses:
+      -
+        custom: []
+        status: 401
+        content: '{"success":false,"message":"Unauthenticated."}'
+        headers:
+          cache-control: 'no-cache, private'
+          content-type: application/json
+          access-control-allow-origin: '*'
+        description: null
+    responseFields: []
+    auth:
+      - headers
+      - Authorization
+      - 'Bearer 3V5EgbkvZcDPa166h8fd4ae'
+    controller: null
+    method: null
+    route: null
